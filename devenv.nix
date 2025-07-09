@@ -21,8 +21,9 @@
   enterTest = ''
     set -e
     cargo fmt --check --all
-    cargo check --workspace --all-targets
-    cargo nextest run --workspace
+    cargo check --all-targets
+    cargo nextest run --all-features
+    cargo test --doc
   '';
 
   git-hooks.hooks.actionlint.enable = true;
