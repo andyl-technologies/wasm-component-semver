@@ -18,8 +18,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 ///
 /// # Alternate Lookup Logic
 ///
-/// - For major versions > 0: alternate is `major.0.0`
-/// - For minor versions > 0 (when major is 0): alternate is `0.minor.0`
+/// - For major versions > 0: alternate is `major.*.*`
+/// - For minor versions > 0 (when major is 0): alternate is `0.minor.*`
 /// - Otherwise: alternate is `0.0.patch`
 /// - Pre-release versions have no alternates
 ///
