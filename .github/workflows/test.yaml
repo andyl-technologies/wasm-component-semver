@@ -1,0 +1,57 @@
+name: 'Run Tests'
+
+on:
+  pull_request:
+  push:
+    branches: [ master ]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  tests:
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      RUSTC_WRAPPER: 'sccache'
+      CARGO_INCREMENTAL: '0'
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup devenv
+        uses: andyl-technologies/github-actions/setup-devenv@master
+
+      - name: Setup Rust cache
+        uses: andyl-technologies/github-actions/rust-cache@master
+        with:
+          cache-all-crates: true
+          use-sccache: true
+
+      - name: Run tests
+        run: devenv test
+
+  check-publish:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup devenv
+        uses: andyl-technologies/github-actions/setup-devenv@master
+
+      - name: Verify crate publishing
+        uses: katyo/publish-crates@v2
+        with:
+          dry-run: true
+          ignore-unpublished-changes: false

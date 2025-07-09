@@ -1,0 +1,10 @@
+[package]
+name = "wasm-component-semver"
+authors = ["ANDYL Open Source <oss@andyl.com>"]
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+derivative = "2"
+semver = "1"
