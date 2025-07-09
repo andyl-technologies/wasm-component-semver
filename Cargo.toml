@@ -2,7 +2,7 @@
 name = "wasm-component-semver"
 description = "Library for working with semantic versions using logic that is compatible with the WebAssembly Component Model implementation in Wasmtime"
 authors = ["ANDYL Open Source <oss@andyl.com>"]
-version = "1.0.0"
+version = "1.0.1-pre"
 edition = "2024"
 license = "MIT"
 
