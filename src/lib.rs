@@ -9,7 +9,9 @@
 
 use derivative::Derivative;
 use semver::Version;
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::io::{Read, Write};
 
 /// A map that stores values indexed by semantic versions with support for alternate lookups.
 ///
@@ -43,9 +45,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derivative(Default(bound = ""))]
 pub struct VersionMap<T> {
     /// Primary storage mapping versions to values
-    versions: BTreeMap<Version, T>,
+    versions: BTreeMap<WrappedVersion, T>,
     /// Secondary mapping for alternate version lookups
-    alternates: HashMap<Version, BTreeSet<Version>>,
+    alternates: HashMap<Version, BTreeSet<WrappedVersion>>,
 }
 
 impl<T> VersionMap<T> {
@@ -57,13 +59,33 @@ impl<T> VersionMap<T> {
         }
     }
 
-    /// Attempts to insert a version-value pair, returning an error if the version already exists.
-    pub fn try_insert(&mut self, version: Version, value: T) -> Result<(), (Version, T)> {
-        if self.versions.contains_key(&version) {
-            return Err((version, value));
+    fn from_versions(versions: BTreeMap<WrappedVersion, T>) -> Self {
+        let mut alternates: HashMap<Version, BTreeSet<WrappedVersion>> = HashMap::new();
+
+        for (version, _) in &versions {
+            if let Some(alternate) = version_alternate(&version.inner) {
+                alternates
+                    .entry(alternate)
+                    .or_default()
+                    .insert(version.clone());
+            }
         }
 
-        if let Some(alternate) = version_alternate(&version) {
+        Self {
+            versions,
+            alternates,
+        }
+    }
+
+    /// Attempts to insert a version-value pair, returning an error if the version already exists.
+    pub fn try_insert(&mut self, version: Version, value: T) -> Result<(), (Version, T)> {
+        let version: WrappedVersion = version.into();
+
+        if self.versions.contains_key(&version) {
+            return Err((version.into(), value));
+        }
+
+        if let Some(alternate) = version_alternate(&version.inner) {
             self.alternates
                 .entry(alternate)
                 .or_default()
@@ -79,7 +101,9 @@ impl<T> VersionMap<T> {
     ///
     /// Updates the alternates mapping appropriately.
     pub fn insert(&mut self, version: Version, value: T) -> Option<T> {
-        if let Some(alternate) = version_alternate(&version) {
+        let version: WrappedVersion = version.into();
+
+        if let Some(alternate) = version_alternate(&version.inner) {
             self.alternates
                 .entry(alternate)
                 .or_default()
@@ -155,11 +179,13 @@ impl<T> VersionMap<T> {
                 .and_then(|version| self.versions.get_key_value(version));
 
             if maybe_key_value.is_some() {
-                return maybe_key_value;
+                return maybe_key_value.map(|(k, v)| (k.borrow(), v));
             }
         }
 
-        self.versions.get_key_value(version)
+        self.versions
+            .get_key_value(version)
+            .map(|(k, v)| (k.borrow(), v))
     }
 
     /// Gets a value by version or returns the latest version if no specific version is provided.
@@ -171,7 +197,7 @@ impl<T> VersionMap<T> {
     /// # use wasm_component_semver::VersionMap;
     ///
     /// let mut map = VersionMap::new();
-    /// map.insert(Version::new(0, 0, 1), "v0.0.9");
+    /// map.insert(Version::new(0, 0, 9), "v0.0.9");
     /// map.insert(Version::new(0, 1, 0), "v0.1.0");
     /// map.insert(Version::new(0, 1, 1), "v0.1.1");
     /// map.insert(Version::new(0, 5, 1), "v0.5.1");
@@ -179,7 +205,7 @@ impl<T> VersionMap<T> {
     /// map.insert(Version::new(1, 2, 0), "v1.2.0");
     ///
     /// // Get latest patch
-    /// assert_eq!(map.get_or_latest(Some(&Version::new(0, 0, 1))), Some(&"v0.0.9"));
+    /// assert_eq!(map.get_or_latest(Some(&Version::new(0, 0, 9))), Some(&"v0.0.9"));
     ///
     /// // Get latest minor
     /// assert_eq!(map.get_or_latest(Some(&Version::new(0, 1, 0))), Some(&"v0.1.1"));
@@ -197,9 +223,45 @@ impl<T> VersionMap<T> {
         }
     }
 
+    /// Gets a value by version or returns the latest version and its associated value
+    /// if no specific version is provided.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use semver::Version;
+    /// # use wasm_component_semver::VersionMap;
+    ///
+    /// let mut map = VersionMap::new();
+    /// map.insert(Version::new(0, 0, 9), "v0.0.9");
+    /// map.insert(Version::new(0, 1, 0), "v0.1.0");
+    /// map.insert(Version::new(0, 1, 1), "v0.1.1");
+    /// map.insert(Version::new(0, 5, 1), "v0.5.1");
+    /// map.insert(Version::new(1, 0, 0), "v1.0.0");
+    /// map.insert(Version::new(1, 2, 0), "v1.2.0");
+    ///
+    /// // Get latest patch
+    /// assert_eq!(map.get_or_latest_version(Some(&Version::new(0, 0, 9))), Some((&Version::new(0, 0, 9), &"v0.0.9")));
+    ///
+    /// // Get latest minor
+    /// assert_eq!(map.get_or_latest_version(Some(&Version::new(0, 1, 0))), Some((&Version::new(0, 1, 1), &"v0.1.1")));
+    ///
+    /// // Get latest major
+    /// assert_eq!(map.get_or_latest_version(Some(&Version::new(1, 0, 0))), Some((&Version::new(1, 2, 0), &"v1.2.0")));
+    ///
+    /// // Get the latest version
+    /// assert_eq!(map.get_or_latest_version(None), Some((&Version::new(1, 2, 0), &"v1.2.0")));
+    /// ```
+    pub fn get_or_latest_version(&self, version: Option<&Version>) -> Option<(&Version, &T)> {
+        match version {
+            Some(v) => self.get_version(v),
+            None => self.get_latest(),
+        }
+    }
+
     /// Returns the latest version and its associated value.
     pub fn get_latest(&self) -> Option<(&Version, &T)> {
-        self.versions.last_key_value()
+        self.versions.last_key_value().map(|(k, v)| (k.borrow(), v))
     }
 
     /// Gets a value by exact version match only, without alternate lookup.
@@ -221,6 +283,43 @@ impl<T> VersionMap<T> {
     }
 }
 
+#[cfg(feature = "borsh")]
+impl<T: borsh::BorshSerialize> borsh::BorshSerialize for VersionMap<T> {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.versions.serialize(writer)
+    }
+}
+
+#[cfg(feature = "borsh")]
+impl<T: borsh::BorshDeserialize> borsh::BorshDeserialize for VersionMap<T> {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let versions: BTreeMap<WrappedVersion, T> =
+            borsh::BorshDeserialize::deserialize_reader(reader)?;
+        Ok(Self::from_versions(versions))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize> serde::Serialize for VersionMap<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.versions.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for VersionMap<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let versions: BTreeMap<WrappedVersion, T> = serde::Deserialize::deserialize(deserializer)?;
+        Ok(Self::from_versions(versions))
+    }
+}
+
 /// Computes the alternate version key for fallback lookups.
 ///
 /// This function implements the alternate lookup logic:
@@ -238,6 +337,76 @@ fn version_alternate(version: &Version) -> Option<Version> {
         Some(Version::new(0, version.minor, 0))
     } else {
         Some(Version::new(0, 0, version.patch))
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+struct WrappedVersion {
+    inner: Version,
+}
+
+impl Borrow<Version> for WrappedVersion {
+    fn borrow(&self) -> &Version {
+        &self.inner
+    }
+}
+
+impl From<Version> for WrappedVersion {
+    fn from(version: Version) -> Self {
+        Self { inner: version }
+    }
+}
+
+impl From<WrappedVersion> for Version {
+    fn from(wrapped: WrappedVersion) -> Self {
+        wrapped.inner
+    }
+}
+
+#[cfg(feature = "borsh")]
+impl borsh::BorshSerialize for WrappedVersion {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let s = self.inner.to_string();
+        borsh::BorshSerialize::serialize(&s, writer)
+    }
+}
+
+#[cfg(feature = "borsh")]
+impl borsh::BorshDeserialize for WrappedVersion {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let s: String = borsh::BorshDeserialize::deserialize_reader(reader)?;
+
+        let version = Version::parse(&s).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Failed to parse version from string",
+            )
+        })?;
+
+        Ok(Self { inner: version })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for WrappedVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.inner.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for WrappedVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            inner: serde::Deserialize::deserialize(deserializer)?,
+        })
     }
 }
 
@@ -404,6 +573,58 @@ mod tests {
         assert_eq!(
             version_alternate(&Version::new(0, 0, 5)),
             Some(Version::new(0, 0, 5))
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "borsh")]
+    fn test_borsh_serialize_deserialize() {
+        use borsh::{BorshDeserialize, BorshSerialize};
+
+        let mut map = VersionMap::new();
+        map.insert(Version::new(1, 0, 0), "v1.0.0");
+        map.insert(Version::new(2, 0, 0), "v2.0.0");
+
+        // Serialize
+        let mut buffer = Vec::new();
+        map.serialize(&mut buffer).unwrap();
+
+        // Deserialize
+        let deserialized_map: VersionMap<String> =
+            BorshDeserialize::deserialize_reader(&mut &buffer[..]).unwrap();
+
+        assert_eq!(
+            deserialized_map.get(&Version::new(1, 0, 0)),
+            Some(&"v1.0.0".to_string())
+        );
+
+        assert_eq!(
+            deserialized_map.get(&Version::new(2, 0, 0)),
+            Some(&"v2.0.0".to_string())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_serde_serialize_deserialize() {
+        let mut map = VersionMap::new();
+        map.insert(Version::new(1, 0, 0), "v1.0.0");
+        map.insert(Version::new(2, 0, 0), "v2.0.0");
+
+        // Serialize
+        let serialized = serde_json::to_string(&map).unwrap();
+
+        // Deserialize
+        let deserialized_map: VersionMap<String> = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(
+            deserialized_map.get(&Version::new(1, 0, 0)),
+            Some(&"v1.0.0".to_string())
+        );
+
+        assert_eq!(
+            deserialized_map.get(&Version::new(2, 0, 0)),
+            Some(&"v2.0.0".to_string())
         );
     }
 }
