@@ -11,6 +11,7 @@ use derivative::Derivative;
 use semver::Version;
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+#[cfg(feature = "borsh")]
 use std::io::{Read, Write};
 
 /// A map that stores values indexed by semantic versions with support for alternate lookups.
@@ -59,10 +60,11 @@ impl<T> VersionMap<T> {
         }
     }
 
+    #[cfg(any(feature = "borsh", feature = "serde"))]
     fn from_versions(versions: BTreeMap<WrappedVersion, T>) -> Self {
         let mut alternates: HashMap<Version, BTreeSet<WrappedVersion>> = HashMap::new();
 
-        for (version, _) in &versions {
+        for version in versions.keys() {
             if let Some(alternate) = version_alternate(&version.inner) {
                 alternates
                     .entry(alternate)
