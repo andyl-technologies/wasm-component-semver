@@ -272,12 +272,12 @@ impl<T> VersionMap<T> {
     }
 
     pub fn remove(&mut self, version: &Version) -> Option<T> {
-        if let Some(alternate) = version_alternate(version) {
-            if let Some(set) = self.alternates.get_mut(&alternate) {
-                set.remove(version);
-                if set.is_empty() {
-                    self.alternates.remove(&alternate);
-                }
+        if let Some(alternate) = version_alternate(version)
+            && let Some(set) = self.alternates.get_mut(&alternate)
+        {
+            set.remove(version);
+            if set.is_empty() {
+                self.alternates.remove(&alternate);
             }
         }
 
