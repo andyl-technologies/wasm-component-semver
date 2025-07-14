@@ -53,6 +53,7 @@ pub struct VersionMap<T> {
 
 impl<T> VersionMap<T> {
     /// Creates a new empty `VersionMap`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             versions: BTreeMap::new(),
@@ -135,6 +136,7 @@ impl<T> VersionMap<T> {
     ///
     /// // Get latest major
     /// assert_eq!(map.get(&Version::new(1, 0, 0)), Some(&"v1.2.1"));
+    #[must_use]
     pub fn get(&self, version: &Version) -> Option<&T> {
         if version.build.is_empty() {
             let maybe_value = version_alternate(version)
@@ -172,6 +174,7 @@ impl<T> VersionMap<T> {
     ///
     /// // Get latest major
     /// assert_eq!(map.get_version(&Version::new(1, 0, 0)), Some((&Version::new(1, 2, 1), &"v1.2.1")));
+    #[must_use]
     pub fn get_version(&self, version: &Version) -> Option<(&Version, &T)> {
         if version.build.is_empty() {
             let maybe_key_value = version_alternate(version)
@@ -218,6 +221,7 @@ impl<T> VersionMap<T> {
     /// // Get the latest version
     /// assert_eq!(map.get_or_latest(None), Some(&"v1.2.0"));
     /// ```
+    #[must_use]
     pub fn get_or_latest(&self, version: Option<&Version>) -> Option<&T> {
         match version {
             Some(v) => self.get(v),
@@ -254,6 +258,7 @@ impl<T> VersionMap<T> {
     /// // Get the latest version
     /// assert_eq!(map.get_or_latest_version(None), Some((&Version::new(1, 2, 0), &"v1.2.0")));
     /// ```
+    #[must_use]
     pub fn get_or_latest_version(&self, version: Option<&Version>) -> Option<(&Version, &T)> {
         match version {
             Some(v) => self.get_version(v),
@@ -262,11 +267,13 @@ impl<T> VersionMap<T> {
     }
 
     /// Returns the latest version and its associated value.
+    #[must_use]
     pub fn get_latest(&self) -> Option<(&Version, &T)> {
         self.versions.last_key_value().map(|(k, v)| (k.borrow(), v))
     }
 
     /// Gets a value by exact version match only, without alternate lookup.
+    #[must_use]
     pub fn get_exact(&self, version: &Version) -> Option<&T> {
         self.versions.get(version)
     }
