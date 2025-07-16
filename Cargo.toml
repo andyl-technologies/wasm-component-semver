@@ -5,6 +5,7 @@ authors = ["ANDYL Open Source <oss@andyl.com>"]
 version = "1.0.2-pre"
 edition = "2024"
 license = "MIT"
+rust-version = "1.88"
 
 [features]
 default = []

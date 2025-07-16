@@ -13,6 +13,8 @@
   ];
 
   languages.rust.enable = true;
+  languages.rust.channel = "stable";
+  languages.rust.version = "1.88.0";
 
   processes = lib.optionalAttrs (!config.devenv.isTesting) {
     cargo-watch.exec = "cargo-watch";

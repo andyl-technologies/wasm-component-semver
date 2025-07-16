@@ -3,10 +3,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1751987173,
+        "lastModified": 1752692978,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "9b4d2b5a4f650994045d6752de2ec48c1d9437a4",
+        "rev": "b2281100077d641cbf135e8680e973c0c2270bc4",
         "type": "github"
       },
       "original": {
@@ -94,7 +94,27 @@
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": [
           "git-hooks"
+        ],
+        "rust-overlay": "rust-overlay"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
         ]
+      },
+      "locked": {
+        "lastModified": 1752633862,
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "8668ca94858206ac3db0860a9dec471de0d995f8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
       }
     }
   },
